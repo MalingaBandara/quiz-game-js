@@ -3,10 +3,12 @@ let sec = 0; // Timer seconds
 let qNumber = 1; // Current question number
 let interval = undefined; // Interval for the timer
 let submitDataArray = []; // Array to store submitted answers
+let score = 0; // Variable to track the user's score
 
-// Set the initial values for the timer and question number inputs
+// Set initial values for the timer, question number, and score
 $('#txt-time').val('00:00'); // Set the timer to '00:00'
 $('#txt-q-number').val('1/5'); // Set the initial question number display to '1/5'
+$('#txt-marks').val('0'); // Set initial score to 0
 
 //---------- Q & A --------------
 
@@ -15,11 +17,11 @@ class Answer {
     constructor(id, answer, correctState) {
         this.id = id; // Answer ID
         this.answer = answer; // Text of the answer
-        this.correctState = correctState; // Boolean indicating if the answer is correct or not
+        this.correctState = correctState; // Boolean indicating if the answer is correct
     }
 }
 
-// Question class to represent a question and its possible answers.
+// Question class to represent a question with its possible answers.
 class Question {
     constructor(id, question, answers) {
         this.id = id; // Question ID
@@ -31,7 +33,7 @@ class Question {
 // Initialize an array to store all the questions and answers.
 let dataArray = [];
 
-// Creating questions and their possible answers, then adding them to the array.
+// Create and add questions and their possible answers into the dataArray.
 let q1 = new Question(1, 'What is the capital of France?', [
     new Answer(1, 'Berlin', false),
     new Answer(2, 'Madrid', false),
@@ -67,97 +69,140 @@ let q5 = new Question(5, 'What is the speed of light?', [
     new Answer(4, '100,000 km/s', false)
 ]);
 
-// Add the created questions to the dataArray.
+// Add all questions to the dataArray
 dataArray.push(q1, q2, q3, q4, q5);
 
 //---------- &&&&&&& --------------
 
 // Function to display the array of submitted answers.
 const showAnswers = () => {
-    console.log(submitDataArray);
+    console.log(submitDataArray); // Log all submitted answers
 }
 
-// Function to verify the selected answer or mark the question as skipped if no answer is provided.
+// Function to verify the user's answer or handle skipped questions.
 const verifyAnswer = (state) => {
     clearInterval(interval); // Stop the timer
 
+    let selectedQuestion = dataArray[qNumber - 1]; // Get the current question
+
     if (state === 'skipped') {
-        // If the user skips the question, push null as the answer.
+        // If the question was skipped
         $('#txt-time').val('00:00'); // Reset timer
-        submitDataArray.push(null);
-    } else {
-        // Retrieve the selected answer value from the radio button input.
-        let answer = $('input[name=answer]:checked').val();
-        // Store the question number and selected answer in the submitDataArray.
-        submitDataArray.push({
-            qNumber: qNumber,
-            answer: answer
+        submitDataArray.push(null); // Record skipped question
+
+        // Highlight the correct answer in case of skip
+        selectedQuestion.answers.forEach((ans) => {
+            if (ans.correctState) {
+                $('input[name=answer][value="' + ans.id + '"]').parent().addClass('correct-answer');
+            }
         });
+
+        showFeedbackMessage('Skipped!', 'info'); // Display skipped feedback
+    } else {
+        // If the user selected an answer
+        let answer = $('input[name=answer]:checked').val(); // Get selected answer
+        submitDataArray.push({ qNumber: qNumber, answer: answer }); // Store the answer
+
+        // Highlight the correct and incorrect answers
+        selectedQuestion.answers.forEach((ans) => {
+            if (ans.correctState) {
+                $('input[name=answer][value="' + ans.id + '"]').parent().addClass('correct-answer'); // Highlight correct
+            } else if (ans.id == answer) {
+                $('input[name=answer][value="' + ans.id + '"]').parent().addClass('incorrect-answer'); // Highlight incorrect
+            }
+        });
+
+        // Increment score if the answer is correct
+        if (selectedQuestion.answers.find(ans => ans.id == answer && ans.correctState)) {
+            score++; // Increment score
+            $('#txt-marks').val(score); // Update score display
+            showFeedbackMessage('Correct! Super', 'success'); // Display success message
+        } else {
+            showFeedbackMessage('Incorrect! Try again', 'error'); // Display error message
+        }
     }
 
-    // Check if this is the last question.
-    if (qNumber == 5) {
-        // Reset for a new game and display the results.
-        qNumber = 1;
-        $('#txt-q-number').val('1/5');
-        $('#txt-time').val('00:00');
-        $('#start-button').prop('disabled', false);
-        $('#answer-list').empty();
-        $('#question').val('');
+    // Move to the next question or restart the quiz
+    setTimeout(() => {
+        if (qNumber == 5) {
+            qNumber = 1; // Reset to the first question
+            $('#txt-q-number').val('1/5'); // Reset question number display
+            $('#txt-time').val('00:00'); // Reset timer
+            $('#start-button').prop('disabled', false); // Enable start button
+            $('#answer-list').empty(); // Clear answers
+            $('#question').val(''); // Clear question text
+            showAnswers(); // Display all submitted answers
+        } else {
+            qNumber++; // Move to the next question
+            $('#txt-q-number').val(qNumber + '/5'); // Update question number display
+            displayQuiz(); // Load the next question
+        }
+    }, 3000);
+};
 
-        showAnswers(); // Show all answers
-        return;
+// Function to display feedback messages after each answer.
+const showFeedbackMessage = (message, type) => {
+    let messageBox = $('#feedback-message'); // Get the feedback message element
+
+    // Display message based on the result type
+    if (type === 'success') {
+        messageBox.text(message).css('color', 'green'); // Success message in green
+    } else if (type === 'error') {
+        messageBox.text(message).css('color', 'red'); // Error message in red
+    } else {
+        messageBox.text(message).css('color', 'blue'); // Info message in blue
     }
 
-    // Move to the next question.
-    qNumber++;
-    $('#txt-q-number').val(qNumber + '/5'); // Update question number display
-    displayQuiz(); // Load the next question
-}
+    // Fade out message after 2 seconds
+    messageBox.fadeIn().delay(2000).fadeOut();
+};
 
-// Function to display the current question and its possible answers.
+// Function to display the quiz question and possible answers.
 const displayQuiz = () => {
-    sec = 0; // Reset the timer
+    sec = 0; // Reset timer
 
     let selectedQuestion = dataArray[qNumber - 1]; // Get the current question based on qNumber
 
     $('#question').val(selectedQuestion.question); // Display the question text
-    $('#answer-list').empty(); // Clear the previous answers
+    $('#answer-list').empty(); // Clear previous answers
 
-    // Loop through each answer and create radio buttons for selection.
+    // Create radio buttons for each answer option
     $.each(selectedQuestion.answers, function(index, recode) {
-        let li = $('<li>').css('font-size', '18px'); // Create a list item for each answer
+        let li = $('<li>').css('font-size', '18px'); // List item for each answer
         let rbtn = $('<input>').attr({
-            name: 'answer', // Radio button name
-            type: 'radio', // Input type
-            value: recode.id, // Value set to the answer id
+            name: 'answer', // Set radio button name
+            type: 'radio', // Set type to radio
+            value: recode.id, // Assign answer ID as value
         });
-        let label = $('<label>').text(recode.answer); // Create a label for the answer text
+        let label = $('<label>').text(recode.answer); // Label for answer text
 
-        li.append(rbtn); // Append radio button to the list item
-        li.append(label); // Append the label
-        $('#answer-list').append(li); // Append the list item to the answer list
+        li.append(rbtn); // Append radio button to list item
+        li.append(label); // Append label to list item
+        $('#answer-list').append(li); // Add list item to the answer list
     });
 
-    // Start the timer for 30 seconds.
+    // Start 30-second timer for the current question
     interval = setInterval(() => {
         if (sec < 10) {
-            $('#txt-time').val('00:0' + sec); // Display single-digit seconds with a leading zero
+            $('#txt-time').val('00:0' + sec); // Display seconds with leading zero for single digits
         } else {
-            $('#txt-time').val('00:' + sec); // Display double-digit seconds
+            $('#txt-time').val('00:' + sec); // Display normal seconds format for double digits
         }
         sec++;
 
+        // Automatically skip the question if time runs out
         if (sec == 30) {
-            $('#txt-time').val('00:00'); // Reset the timer
-            verifyAnswer('skipped'); // Automatically skip the question if time runs out
+            $('#txt-time').val('00:00'); // Reset timer
+            verifyAnswer('skipped'); // Skip the question
         }
     }, 1000);
-}
+};
 
-// Function to start the quiz and initialize the first question.
+// Function to start the quiz and load the first question.
 const start = () => {
-    $('#start-button').prop('disabled', true); // Disable the start button to prevent restarting mid-game
-    submitDataArray = []; // Reset the submitted answers array
+    $('#start-button').prop('disabled', true); // Disable the start button during the quiz
+    submitDataArray = []; // Reset submitted answers array
+    score = 0; // Reset score
+    $('#txt-marks').val(score); // Reset score display
     displayQuiz(); // Display the first question
-}
+};
